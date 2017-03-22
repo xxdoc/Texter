@@ -15,3 +15,8 @@
 *.PDF	 diff=astextplain
 *.rtf	 diff=astextplain
 *.RTF	 diff=astextplain
+
+*.cls eol=crlf
+*.frm eol=crlf
+*.bas eol=crlf
+*.manifest eol=crlf
