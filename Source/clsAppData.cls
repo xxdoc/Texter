@@ -25,8 +25,8 @@ Public Enum adMessageType
 End Enum
 
 Const MaxFileSize = 100000  'in bytes
-Private Declare Function SHGetSpecialFolderLocation Lib "shell32" (ByVal hWndOwner As Long, ByVal nFolder As Long, pidl As Long) As Long
-Private Declare Function SHGetPathFromIDList Lib "shell32" Alias "SHGetPathFromIDListA" (ByVal pidl As Long, ByVal pszPath As String) As Long
+Private Declare Function SHGetSpecialFolderLocation Lib "shell32" (ByVal hWndOwner As Long, ByVal nFolder As Long, PIDL As Long) As Long
+Private Declare Function SHGetPathFromIDList Lib "shell32" Alias "SHGetPathFromIDListA" (ByVal PIDL As Long, ByVal pszPath As String) As Long
 
 Public Property Get AppData(DataName As String) As String
     Dim X As Long
@@ -319,7 +319,7 @@ Public Sub SaveToLog(Message As String, Optional Module As String, _
     Optional Procedure As String, Optional ErrorNum As Long, _
     Optional MessageType As adMessageType = adUserNotification)
     On Error GoTo ErrExit:
-    If adError Then
+    If MessageType = adError Then
         Open AppDataLocation & "\Log.txt" For Append As #1
         Write #1, " ----------- Error -----------"
         Write #1, Format(Now, " dd-MMM-yy h:mm:ss AM/PM")

@@ -1,8 +1,9 @@
 VERSION 5.00
+Object = "{831FDD16-0C5C-11D2-A9FC-0000F8754DA1}#2.0#0"; "mscomctl.ocx"
 Begin VB.Form frmSetup 
    BorderStyle     =   3  'Fixed Dialog
    Caption         =   "Setup"
-   ClientHeight    =   5640
+   ClientHeight    =   6945
    ClientLeft      =   45
    ClientTop       =   435
    ClientWidth     =   10080
@@ -11,17 +12,44 @@ Begin VB.Form frmSetup
    LinkTopic       =   "Form1"
    MaxButton       =   0   'False
    MinButton       =   0   'False
-   ScaleHeight     =   5640
+   ScaleHeight     =   6945
    ScaleWidth      =   10080
    ShowInTaskbar   =   0   'False
    StartUpPosition =   3  'Windows Default
+   Begin MSComctlLib.StatusBar StatusBar1 
+      Align           =   2  'Align Bottom
+      Height          =   375
+      Left            =   0
+      TabIndex        =   39
+      Top             =   6570
+      Width           =   10080
+      _ExtentX        =   17780
+      _ExtentY        =   661
+      Style           =   1
+      _Version        =   393216
+      BeginProperty Panels {8E3867A5-8586-11D1-B16A-00C0F0283628} 
+         NumPanels       =   1
+         BeginProperty Panel1 {8E3867AB-8586-11D1-B16A-00C0F0283628} 
+         EndProperty
+      EndProperty
+   End
+   Begin VB.TextBox Textbox 
+      Alignment       =   2  'Center
+      Height          =   285
+      Index           =   5
+      Left            =   2880
+      TabIndex        =   38
+      ToolTipText     =   "Minimum time between Texts."
+      Top             =   6120
+      Width           =   960
+   End
    Begin VB.TextBox Textbox 
       Alignment       =   2  'Center
       Height          =   285
       IMEMode         =   3  'DISABLE
       Index           =   4
       Left            =   1680
-      TabIndex        =   32
+      TabIndex        =   33
       Top             =   5160
       Width           =   3000
    End
@@ -57,16 +85,16 @@ Begin VB.Form frmSetup
       Enabled         =   0   'False
       Height          =   375
       Left            =   7080
-      TabIndex        =   33
-      Top             =   5040
+      TabIndex        =   35
+      Top             =   6030
       Width           =   1335
    End
    Begin VB.CommandButton butClose 
       Caption         =   "Close"
       Height          =   375
       Left            =   8520
-      TabIndex        =   34
-      Top             =   5040
+      TabIndex        =   36
+      Top             =   6030
       Width           =   1335
    End
    Begin VB.TextBox Textbox 
@@ -219,11 +247,36 @@ Begin VB.Form frmSetup
       Top             =   840
       Width           =   3000
    End
+   Begin VB.Label Label13 
+      Caption         =   "Text delay (seconds between texts)"
+      Height          =   285
+      Left            =   120
+      TabIndex        =   37
+      Top             =   6120
+      Width           =   2655
+   End
+   Begin VB.Label Label12 
+      Caption         =   "Options"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   9.75
+         Charset         =   0
+         Weight          =   700
+         Underline       =   -1  'True
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   270
+      Left            =   120
+      TabIndex        =   34
+      Top             =   5760
+      Width           =   2415
+   End
    Begin VB.Label Label11 
       Caption         =   "From Email"
       Height          =   285
       Left            =   120
-      TabIndex        =   35
+      TabIndex        =   32
       Top             =   5160
       Width           =   1335
    End
@@ -455,11 +508,12 @@ Private Sub Load()
         Cell(C).Text = AD.AppData("Cell" & C)
         Provider(C).Text = AD.AppData("Provider" & C)
     Next C
-    TextBox(0).Text = AD.AppData("Port")
-    TextBox(1).Text = AD.AppData("Server")
-    TextBox(2).Text = AD.AppData("Username")
-    TextBox(3).Text = AD.AppData("Password")
-    TextBox(4).Text = AD.AppData("From")
+    Textbox(0).Text = AD.AppData("Port")
+    Textbox(1).Text = AD.AppData("Server")
+    Textbox(2).Text = AD.AppData("Username")
+    Textbox(3).Text = AD.AppData("Password")
+    Textbox(4).Text = AD.AppData("From")
+    Textbox(5).Text = Val(AD.AppData("Delay"))
     Loading = False
     On Error GoTo 0
 ErrExit:
@@ -482,11 +536,12 @@ Private Sub Save()
         AD.AppData("Cell" & C) = Cell(C)
         AD.AppData("Provider" & C) = Provider(C)
     Next C
-    AD.AppData("Port") = TextBox(0).Text
-    AD.AppData("Server") = TextBox(1).Text
-    AD.AppData("Username") = TextBox(2).Text
-    AD.AppData("Password") = TextBox(3).Text
-    AD.AppData("From") = TextBox(4).Text
+    AD.AppData("Port") = Textbox(0).Text
+    AD.AppData("Server") = Textbox(1).Text
+    AD.AppData("Username") = Textbox(2).Text
+    AD.AppData("Password") = Textbox(3).Text
+    AD.AppData("From") = Textbox(4).Text
+    AD.AppData("Delay") = Val(Textbox(5).Text)
     On Error GoTo 0
 ErrExit:
     Exit Sub
@@ -501,12 +556,13 @@ End Sub
 
 Private Sub Textbox_Change(Index As Integer)
     Edited
+    StatusBar1.SimpleText = ""
 End Sub
 
 Private Sub textbox_GotFocus(Index As Integer)
     On Error GoTo ErrHandler
-    TextBox(Index).SelStart = 0
-    TextBox(Index).SelLength = Len(TextBox(Index).Text)
+    Textbox(Index).SelStart = 0
+    Textbox(Index).SelLength = Len(Textbox(Index).Text)
     On Error GoTo 0
 ErrExit:
     Exit Sub
@@ -515,3 +571,24 @@ ErrHandler:
     Resume ErrExit
 End Sub
 
+Private Sub Textbox_Validate(Index As Integer, Cancel As Boolean)
+    Dim V As Long
+    On Error GoTo ErrHandler
+    Select Case Index
+        Case 5
+            'delay
+            If Textbox(Index) <> "" Then
+                V = Val(Textbox(Index))
+                If V < 0 Or V > 60 Or Not IsNumeric(Textbox(Index)) Then
+                    StatusBar1.SimpleText = "Invalid delay. Requires a number in the range of 0 - 60."
+                    Cancel = True
+                End If
+            End If
+    End Select
+    On Error GoTo 0
+ErrExit:
+    Exit Sub
+ErrHandler:
+     AD.DisplayError Err.Number, "frmSetup", "Textbox_Validate", Err.Description
+     Resume ErrExit
+End Sub

@@ -180,6 +180,9 @@ Attribute TR.VB_VarHelpID = -1
 Dim StreamCount As Long
 Dim LastModified As Date
 Dim ErrorCount As Long
+Dim Messenger As clsMessaging
+Dim LastSend As Date
+Dim Delay As Long
 
 Private Sub butClose_Click()
     Unload Me
@@ -197,18 +200,17 @@ Private Sub butFile_Click()
         .CancelError = True
         .DialogTitle = "Open"
         .ShowOpen
-        If CheckFile(.FileName) Then
-            AD.AppData("TextFile") = .FileName
-            Textbox(4) = .FileName
-        Else
-            StatusBar1.SimpleText = "Invalid file name."
-            Beep
-        End If
+        Messenger.ReadFileName = .FileName
+        AD.AppData("TextFile") = .FileName
+        Textbox(4) = .FileName
     End With
 ErrExit:
     Exit Sub
 ErrHandler:
     Select Case Err.Number
+        Case 52
+            StatusBar1.SimpleText = "Invalid file name. Must end in '.txt'"
+            Beep
         Case 32755
             'user canceled
         Case Else
@@ -223,6 +225,7 @@ End Sub
 
 Private Sub butSetup_Click()
     frmSetup.Show vbModal
+    Delay = Val(AD.AppData("Delay"))
 End Sub
 
 Private Sub butSingle_Click()
@@ -280,36 +283,6 @@ Private Sub butStream_LostFocus()
     StatusBar1.SimpleText = ""
 End Sub
 
-Private Function CheckFile(NewFile As String) As Boolean
-    On Error GoTo ErrHandler
-    CheckFile = False
-    If IsTextFile(NewFile) Then
-        If FileExists(NewFile) Then
-            CheckFile = True
-        Else
-            CheckFile = CreateFile(NewFile)
-        End If
-    End If
-    On Error GoTo 0
-ErrExit:
-    Exit Function
-ErrHandler:
-     AD.DisplayError Err.Number, "frmMain", "CheckFile", Err.Description
-     Resume ErrExit
-End Function
-
-Private Function CreateFile(NewFile As String) As Boolean
-    On Error GoTo ErrHandler
-    Open NewFile For Output As #1
-    Close #1
-    CreateFile = True
-ErrExit:
-    Exit Function
-ErrHandler:
-    CreateFile = False
-    Resume ErrExit
-End Function
-
 Public Sub EventMessage(ByVal Mes As String, Optional ShowTime As Boolean = True)
 '---------------------------------------------------------------------------------------
 ' Procedure : EventMessage
@@ -337,36 +310,6 @@ ErrHandler:
     AD.DisplayError Err.Number, "frmMain", "EventMessage", Err.Description
     Resume ErrExit
 End Sub
-
-Private Function FileChanged() As Boolean
-    Dim tmpDate As Date
-    Dim FileName As String
-    On Error GoTo ErrExit
-    FileName = AD.AppData("TextFile")
-    'first check for archive bit set
-    If (GetAttr(FileName) And vbArchive) <> 0 Then
-        'check date/time as well
-        tmpDate = FileDateTime(FileName)
-        If LastModified < tmpDate Then
-            'file changed
-            LastModified = tmpDate
-            FileChanged = True
-        End If
-    End If
-    On Error GoTo 0
-ErrExit:
-    Exit Function
-End Function
-
-Private Function FileExists(NewFile As String) As Boolean
-    On Error GoTo ErrHandler
-    If Dir(NewFile) <> "" Then FileExists = True
-ErrExit:
-    Exit Function
-ErrHandler:
-    FileExists = False
-    Resume ErrExit
-End Function
 
 Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
     Dim AC As String
@@ -416,14 +359,23 @@ Private Sub Form_Load()
     On Error GoTo ErrHandler
     Me.Caption = "Texter (ver. " & App.Major & "." & App.Minor & "." & App.Revision & ")"
     Set TR = New clsTexting
-    Textbox(4) = AD.AppData("TextFile")
-    SetLastModified
+    Set Messenger = New clsMessaging
+    Messenger.ReadFileName = AD.AppData("TextFile")
+    Textbox(4) = Messenger.ReadFileName
+    Delay = Val(AD.AppData("Delay"))
+    LastSend = 0
     AD.LoadFormData Me
     On Error GoTo 0
 ErrExit:
     Exit Sub
 ErrHandler:
-    AD.DisplayError Err.Number, "frmMain", "Form_Load", Err.Description
+    Select Case Err.Number
+        Case 52
+            StatusBar1.SimpleText = "Invalid file name. Must end in '.txt'"
+            Beep
+        Case Else
+            AD.DisplayError Err.Number, "frmMain", "Form_Load", Err.Description
+    End Select
     Resume ErrExit
 End Sub
 
@@ -439,76 +391,50 @@ ErrHandler:
     Resume ErrExit
 End Sub
 
-Private Function IsTextFile(NewFile As String) As Boolean
-    On Error GoTo ErrExit
-    IsTextFile = (LCase(Right(NewFile, 4)) = ".txt")
-ErrExit:
-    Exit Function
-End Function
-
-Private Sub ReadFile()
-    Dim TextFile As String
-    Dim S As String
-    Dim FN As Integer
-    Dim FileLen As Long
+Private Sub ScanFile()
+    Dim Secs As Long
+    Dim Mes As String
     Dim C As Long
     On Error GoTo ErrHandler
-    TextFile = AD.AppData("TextFile")
-    If FileChanged Then
-        S = ""
-        FN = FreeFile
-        Open TextFile For Input Lock Read Write As FN
-        FileLen = LOF(FN)
-        If FileLen > 0& Then S = Input(FileLen, FN)
-        Close #FN
-        'clear archive bit
-        SetAttr TextFile, vbNormal
-        With TR
-            .Message = S
-            .Port = Val(AD.AppData("Port"))
-            .Server = AD.AppData("Server")
-            .Username = AD.AppData("Username")
-            .Password = AD.AppData("Password")
-            .FromEmail = AD.AppData("From")
-            For C = 0 To 3
-                If Val(AD.AppData("Select" & C)) = 1 Then
-                    .CellNumber = AD.AppData("Cell" & C)
-                    .Provider = AD.AppData("Provider" & C)
-                    .Send
-                    DoEvents
-                End If
-            Next C
-        End With
+    If Messenger.FileChanged Then
+        Secs = SecondsDiff(LastSend, Now)
+        If Secs >= Delay Or LastSend = 0 Then
+            Mes = Messenger.ReadMessage
+            If Mes <> "" Then
+                LastSend = Now
+                With TR
+                    .Message = Mes
+                    .Port = Val(AD.AppData("Port"))
+                    .Server = AD.AppData("Server")
+                    .Username = AD.AppData("Username")
+                    .Password = AD.AppData("Password")
+                    .FromEmail = AD.AppData("From")
+                    For C = 0 To 3
+                        If Val(AD.AppData("Select" & C)) = 1 Then
+                            .CellNumber = AD.AppData("Cell" & C)
+                            .Provider = AD.AppData("Provider" & C)
+                            .Send
+                            DoEvents
+                        End If
+                    Next C
+                End With
+            End If
+        End If
     End If
     On Error GoTo 0
 ErrExit:
     Exit Sub
 ErrHandler:
-    Select Case Err.Number
-        Case 53
-            'file not found, exit
-            StatusBar1.SimpleText = "File not found."
-            SetStreamState False
-            Beep
-        Case 70
-            'file locked, exit
-        Case 380
-            'settings error
-            StatusBar1.SimpleText = Err.Description
-            SetStreamState False
-            Beep
-        Case Else
-            AD.DisplayError Err.Number, "frmMain", "ReadFile", Err.Description
-            SetStreamState False
-    End Select
+    AD.SaveToLog Err.Description, "frmMain", "ScanFile", Err.Number
     Resume ErrExit
 End Sub
 
-Private Sub SetLastModified()
+Private Function SecondsDiff(D1 As Date, D2 As Date) As Long
     On Error GoTo ErrExit
-    LastModified = FileDateTime(AD.AppData("TextFile"))
+    SecondsDiff = Delay
+    SecondsDiff = DateDiff("s", D1, D2)
 ErrExit:
-End Sub
+End Function
 
 Private Sub SetStreamState(NewVal As Boolean)
     On Error GoTo ErrHandler
@@ -547,7 +473,7 @@ Private Sub Timer1_Timer()
     StreamCount = StreamCount + 1
     StatusBar1.SimpleText = "Stream Loop " & StreamCount
     If StreamCount > 99 Then StreamCount = 0
-    ReadFile
+    ScanFile
     On Error GoTo 0
 ErrExit:
     Exit Sub
